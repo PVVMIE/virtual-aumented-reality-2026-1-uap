@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<QCARConfig>
+  <Tracking>
+    <ImageTarget name="Target_Carton" size="0.100000 0.100000" />
+    <ImageTarget name="Lata_gloria" size="1.000000 1.000000" />
+    <ImageTarget name="i" size="1.000000 0.735955" />
+    <ImageTarget name="Target_IncaKola" size="0.100000 0.040357" />
+    <ImageTarget name="IncaKola" size="0.100000 0.255425" />
+  </Tracking>
+</QCARConfig>
