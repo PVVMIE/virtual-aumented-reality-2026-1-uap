@@ -1,8 +1,8 @@
 # Guía de Trabajo 09 — Diseño de Escenarios 3D
 ## ⚠️ VERSIÓN ESTUDIANTE
 
-**Estudiante:** Ruben Quispe  **Código:** ____________
-**Fecha:** 13/06/2026 | **Puntuación total:** ____/20
+**Estudiante:** Gianfranco Eduardo Levano Villanueva  **Código:**  2221898772
+**Fecha:** 06/06/2026 | **Puntuación total:** ____/20
 
 ---
 
@@ -97,9 +97,10 @@ FPS (Game View): 12
 
 | Elemento | ¿Estático o dinámico? | Técnica de optimización | Material (descripción) |
 |---------|----------------------|------------------------|----------------------|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+|Mesas y mobiliario del laboratorio |Estático |Static Batching y Occlusion Culling |Material de madera y metal con texturas PBR de baja resolución optimizada. |
+|Paredes, piso y techo del laboratorio |Estático |Light Baking y Occlusion Culling |Materiales de concreto, cerámica y pintura con iluminación precalculada |
+|Frascos químicos interactivos |Dinámico |Prefabs reutilizables y Collider simplificado |Material de vidrio transparente con shader de reflexión y contenido químico coloreado. |
+|Tabla periódica interactiva |Dinámico |UI Canvas optimizado y carga bajo demanda de información |Panel digital con materiales emisivos y elementos gráficos interactivos. |
+|Personaje jugador |Dinámico |LOD y optimización de físicas |Modelo 3D controlado por teclado y mouse con componentes de movimiento y cámara. |
 
 *PSISP08075 | Universidad Autónoma del Perú | 2026-1*
