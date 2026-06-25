@@ -1,131 +1,192 @@
-# Guía de Trabajo 10 — Interacción Avanzada en AR
+# Laboratorio 10 — App AR con Interacción Avanzada y UI
 ## ⚠️ VERSIÓN ESTUDIANTE
 
-**Estudiante:** TAIPE MONGE DANIELA YADIRA  **Código:** 2221899784
-**Fecha:** 13/06/2026| **Puntuación total:** ____/20
+**Tiempo estimado:** 100 minutos
 
 ---
 
-## PARTE I — Opción Múltiple (4 puntos)
+## Objetivo
 
-1. Para evitar conflicto entre pinch (2 dedos) y rotate (1 dedo), se debe:
-- [ ] a) Deshabilitar uno de los dos gestos
-- [x] b) Usar if (touchCount == 2) para pinch y else if (touchCount == 1) para rotate
-- [ ] c) Usar callbacks en vez de Update()
-- [ ] d) Cada gesto requiere un script separado
+Extender la app AR de colocación de objetos (Lab 03/04) con:
+- Pinch to scale + rotate con 1 dedo
+- UI flotante World Space con información del objeto
+- Botón de eliminar objeto
+- Conexión a datos externos (simulada)
 
-Explicación:
-Al verificar primero si hay dos dedos y luego un dedo mediante else if, se evita que ambos gestos se ejecuten al mismo tiempo y generen conflictos en la interacción.
+---
 
+## PASO 1 — Script GestosAR.cs (35 min)
 
-2. Un Canvas con Render Mode "World Space" en AR permite:
-- [ ] a) Que la UI siempre esté en la misma posición de la pantalla
-- [x] b) Que la UI exista como objeto 3D flotante en el espacio AR
-- [ ] c) Que la UI sea transparente
-- [ ] d) Optimizar automáticamente el número de draw calls
+`Assets/Scripts/GestosAR.cs`:
 
-Explicación:
-El modo World Space convierte la interfaz en un objeto dentro del entorno 3D, permitiendo que el usuario la vea integrada en el espacio aumentado.
+```csharp
+using UnityEngine;
+using UnityEngine.XR.ARFoundation;
+using UnityEngine.XR.ARSubsystems;
+using System.Collections.Generic;
+using TMPro;
 
+[RequireComponent(typeof(ARRaycastManager))]
+public class GestosAR : MonoBehaviour
+{
+    public GameObject prefabObjeto;
+    public GameObject panelInfoPrefab;
+    public float velocidadRotacion = 0.3f;
+    public float sensibilidadPinch = 1f;
 
-3. Physics.Raycast en este contexto (S10) detecta:
-- [ ] a) Planos AR detectados por ARCore
-- [x] b) Colliders de GameObjects de Unity
-- [ ] c) Feature points del SLAM
-- [ ] d) La posición de la luz en la escena
+    private ARRaycastManager raycastManager;
+    private List<ARRaycastHit> hits = new List<ARRaycastHit>();
+    private GameObject objeto;
+    private GameObject panelInfo;
 
-Explicación:
-Physics.Raycast lanza un rayo virtual para detectar colisiones con GameObjects que poseen componentes Collider dentro de Unity.
+    // Variables para pinch
+    private float distanciaInicialPinch;
+    private float escalaInicialPinch;
 
+    void Awake() => raycastManager = GetComponent<ARRaycastManager>();
 
-4. LookAt(Camera.main.transform) aplicado a un panel UI:
-- [ ] a) Hace que el panel se mueva hacia la cámara
-- [x] b) Rota el panel para que siempre enfrente a la cámara (billboard)
-- [ ] c) Cambia el tamaño del panel según la distancia
-- [ ] d) Desactiva el panel cuando la cámara se aleja
+    void Update()
+    {
+        if (Input.touchCount == 0) return;
 
-Explicación:
-La función LookAt orienta el objeto hacia la cámara, permitiendo que el usuario siempre pueda leer el contenido del panel sin importar su posición.
+        if (Input.touchCount == 2)
+        {
+            ManejarPinch();
+        }
+        else if (Input.touchCount == 1)
+        {
+            Touch toque = Input.GetTouch(0);
 
+            if (toque.phase == TouchPhase.Began)
+                ManejarToque(toque.position);
+            else if (toque.phase == TouchPhase.Moved && objeto != null)
+                ManejarRotacion(toque);
+        }
+    }
 
-## PARTE II — Completar (4 puntos)
+    void ManejarToque(Vector2 posicion)
+    {
+        // Primero: ¿tocó el objeto existente?
+        if (objeto != null)
+        {
+            Ray ray = Camera.main.ScreenPointToRay(posicion);
+            if (Physics.Raycast(ray, out RaycastHit hit))
+            {
+                if (hit.collider.gameObject == objeto || hit.collider.transform.IsChildOf(objeto.transform))
+                {
+                    TogglePanel();
+                    return;
+                }
+            }
+        }
 
-1. t.deltaPosition.x en un Touch de Unity indica el DESPLAZAMIENTO del dedo desde el frame anterior en el eje horizontal.
+        // Si no: ARRaycast para colocar/mover
+        hits.Clear();
+        if (raycastManager.Raycast(posicion, hits, TrackableType.PlaneWithinPolygon))
+        {
+            Pose pose = hits[0].pose;
+            if (objeto == null)
+                objeto = Instantiate(prefabObjeto, pose.position, pose.rotation);
+            else
+                objeto.transform.SetPositionAndRotation(pose.position, pose.rotation);
 
-2. Mathf.Clamp(valor, min, max) en el pinch sirve para LIMITAR los valores de escala extremos.
+            // Mover el panel con el objeto
+            if (panelInfo != null)
+                panelInfo.transform.position = objeto.transform.position + Vector3.up * 0.2f;
+        }
+    }
 
-3. Para mostrar datos de una API REST en Unity, se usa una COROUTINE (método que puede pausar sin bloquear el hilo principal).
+    void ManejarRotacion(Touch toque)
+    {
+        float rot = -toque.deltaPosition.x * velocidadRotacion;
+        objeto.transform.Rotate(Vector3.up, rot, Space.World);
+    }
 
-4. Un panel UI que siempre mira a la cámara se llama BILLBOARD en diseño 3D.
+    void ManejarPinch()
+    {
+        if (objeto == null) return;
+        Touch t0 = Input.GetTouch(0), t1 = Input.GetTouch(1);
 
+        if (t0.phase == TouchPhase.Began || t1.phase == TouchPhase.Began)
+        {
+            distanciaInicialPinch = Vector2.Distance(t0.position, t1.position);
+            escalaInicialPinch = objeto.transform.localScale.x;
+        }
+        else
+        {
+            float factor  = Vector2.Distance(t0.position, t1.position) / distanciaInicialPinch;
+            float nuevaEscala = Mathf.Clamp(escalaInicialPinch * factor * sensibilidadPinch, 0.05f, 5f);
+            objeto.transform.localScale = Vector3.one * nuevaEscala;
+        }
+    }
 
-## PARTE III — Análisis y diseño (8 puntos)
+    void TogglePanel()
+    {
+        if (panelInfo == null && panelInfoPrefab != null)
+        {
+            panelInfo = Instantiate(panelInfoPrefab);
+            panelInfo.transform.position = objeto.transform.position + Vector3.up * 0.2f;
+        }
+        else if (panelInfo != null)
+        {
+            panelInfo.SetActive(!panelInfo.activeSelf);
+        }
+    }
 
-### 3.1 Analiza el fragmento de código
+    public void EliminarObjeto()
+    {
+        if (objeto != null) Destroy(objeto);
+        if (panelInfo != null) Destroy(panelInfo);
+        objeto = null;
+        panelInfo = null;
+    }
 
-| Sección | ¿Qué hace? | ¿Cuándo se activa? |
-|----------|------------|-------------------|
-| A | Detecta dos dedos y calcula la distancia entre ellos para realizar escalado (pinch) | Cuando Input.touchCount == 2 |
-| B | Detecta el movimiento horizontal de un dedo y rota el objeto | Cuando Input.touchCount == 1 y el dedo se mueve |
-| Else-if | Evita que el sistema procese pinch y rotación simultáneamente | Cuando solo existe un dedo en pantalla |
-
-
-### 3.2 Pseudo-código del sistema de interacción
-
-```pseudo
-Iniciar aplicación
-
-Si usuario toca un plano AR:
-    Crear sofá en la posición detectada
-
-Si hay 2 dedos en pantalla:
-    Calcular distancia entre dedos
-    Escalar sofá según la variación de distancia
-    Limitar escala con Clamp()
-
-Si hay 1 dedo en pantalla:
-    Detectar movimiento horizontal
-    Rotar sofá sobre eje Y
-
-Si usuario toca el sofá:
-    Mostrar panel UI con:
-        - Nombre del producto
-        - Precio
-        - Descripción
+    void LateUpdate()
+    {
+        if (panelInfo != null && panelInfo.activeSelf)
+        {
+            panelInfo.transform.LookAt(Camera.main.transform);
+            panelInfo.transform.Rotate(0, 180f, 0);
+        }
+    }
+}
 ```
 
+---
 
-### 3.3 Diferencia entre Physics.Raycast y ARRaycastManager.Raycast
+## PASO 2 — Crear Panel UI flotante (20 min)
 
-| | Physics.Raycast | ARRaycastManager.Raycast |
-|---|---|---|
-| Detecta | Colliders de GameObjects de Unity | Planos y superficies detectadas por ARCore/ARKit |
-| Cuándo usar | Seleccionar o interactuar con objetos virtuales | Colocar objetos AR sobre superficies reales |
+1. Hierarchy → UI → Canvas
+2. Canvas → Render Mode: **World Space**
+3. Canvas Scale: 0.002 (para que sea pequeño en el espacio 3D)
+4. Agregar hijos:
+   - Image (panel fondo semitransparente, Alpha 0.7)
+   - TextMeshPro (nombre del objeto)
+   - TextMeshPro (descripción breve)
+   - Button → Text: "Eliminar"
+5. Al Button → On Click: arrastrar el GameObject XR Origin y seleccionar `GestosAR.EliminarObjeto`
+6. Convertir en Prefab: `Assets/Prefabs/PanelInfoAR.prefab`
+7. Arrastrar al campo "Panel Info Prefab" del script
 
+---
 
-## PARTE IV — Reflexión (4 puntos)
+## PASO 3 — Prueba y evidencias (15 min)
 
-### 4.1 Affordance visual en una app AR
+Probar en simulador o celular:
+- Tap → colocar objeto
+- Pinch → escalar
+- Swipe horizontal → rotar
+- Tap sobre objeto → mostrar/ocultar panel
+- Botón Eliminar → borrar objeto
 
-1. Resaltar el sofá con un borde luminoso cuando el usuario lo apunta o toca, indicando que es interactivo.
+## Evidencias
 
-2. Mostrar iconos flotantes de rotación y escalado alrededor del sofá para sugerir que puede manipularse con gestos.
-
-
-### 4.2 Adaptaciones para usuarios mayores de 60 años
-
-1. Utilizar botones grandes y textos con mayor tamaño para facilitar la lectura.
-
-2. Reducir la cantidad de gestos complejos, permitiendo acciones mediante botones visibles.
-
-3. Incorporar instrucciones visuales y mensajes de ayuda permanentes durante el uso de la aplicación.
-
-4. Aumentar el contraste de colores para mejorar la visibilidad de la interfaz.
-
-
-Conclusión:
-
-La aplicación AR debe gestionar correctamente los gestos táctiles para evitar conflictos entre escalado y rotación. Además, el uso de interfaces intuitivas, affordance visual y adaptaciones para adultos mayores mejora significativamente la experiencia de usuario y la accesibilidad de la aplicación.
+```
+□ 1. Captura del script GestosAR en Inspector (con prefabs asignados)
+□ 2. Captura del Panel UI (modo World Space, con botón Eliminar)
+□ 3. Video: colocar objeto + pinch + rotate (en 1 video)
+□ 4. Video: tap sobre objeto → panel aparece → botón Eliminar
+□ 5. Link al commit de GitHub
+```
 
 *PSISP08075 | Universidad Autónoma del Perú | 2026-1*
-
